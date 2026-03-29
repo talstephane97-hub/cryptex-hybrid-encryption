@@ -1,0 +1,8 @@
+keys/
+logs/
+outputs/
+__pycache__/
+*.pyc
+.env
+venv/
+.vscode/
