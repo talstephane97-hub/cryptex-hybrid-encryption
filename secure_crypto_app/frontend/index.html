@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRYPTEX — Chiffrement Hybride</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════
+       OVERLAY DE DÉMARRAGE — Chargement des clés
+  ═══════════════════════════════════════════════ -->
+  <div id="boot-overlay" class="boot-overlay">
+    <div class="boot-card">
+      <div class="boot-lock">
+        <svg class="lock-icon" viewBox="0 0 48 48" fill="none">
+          <rect class="lock-body" x="8" y="22" width="32" height="22" rx="4" />
+          <path class="lock-shackle" d="M14 22V16a10 10 0 0120 0v6" stroke-linecap="round"/>
+          <circle class="lock-hole" cx="24" cy="34" r="3"/>
+          <line class="lock-key-line" x1="24" y1="37" x2="24" y2="41" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1 class="boot-title">CRYPTEX</h1>
+      <p class="boot-sub">Chiffrement Hybride RSA-4096 · AES-256-GCM</p>
+
+      <div id="boot-form-container">
+        <!-- État : pas de clés sur le disque -->
+        <div id="boot-new" class="boot-section hidden">
+          <p class="boot-info">Aucune paire de clés détectée. Créez votre trousseau sécurisé.</p>
+          <div class="input-group">
+            <label class="input-label">Passphrase de protection (Argon2id)</label>
+            <input type="password" id="new-password" class="cyber-input" placeholder="Choisissez une passphrase robuste…" autocomplete="new-password"/>
+            <div class="password-strength" id="strength-bar">
+              <div class="strength-fill" id="strength-fill"></div>
+            </div>
+            <span class="strength-label" id="strength-label"></span>
+          </div>
+          <button class="btn-primary" id="btn-generate-keys">
+            <span class="btn-icon">⬡</span> Générer la paire de clés RSA-4096
+          </button>
+        </div>
+
+        <!-- État : clés existantes sur le disque -->
+        <div id="boot-existing" class="boot-section hidden">
+          <p class="boot-info">Trousseau détecté. Déverrouillez avec votre passphrase.</p>
+          <div class="input-group">
+            <label class="input-label">Passphrase</label>
+            <input type="password" id="load-password" class="cyber-input" placeholder="Entrez votre passphrase…" autocomplete="current-password"/>
+          </div>
+          <button class="btn-primary" id="btn-load-keys">
+            <span class="btn-icon">◈</span> Déverrouiller
+          </button>
+          <button class="btn-ghost" id="btn-regen-keys">Régénérer un nouveau trousseau</button>
+        </div>
+
+        <!-- Spinner de chargement -->
+        <div id="boot-loading" class="boot-section hidden">
+          <div class="hex-spinner"></div>
+          <p class="boot-processing" id="boot-processing-text">Dérivation Argon2id en cours…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       APPLICATION PRINCIPALE
+  ═══════════════════════════════════════════════ -->
+  <div id="app" class="app hidden">
+
+    <!-- Fond animé -->
+    <canvas id="bg-canvas" class="bg-canvas"></canvas>
+
+    <!-- ── SIDEBAR ── -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <svg class="logo-hex" viewBox="0 0 36 36">
+          <polygon points="18,2 34,10 34,26 18,34 2,26 2,10"/>
+          <text x="18" y="23" text-anchor="middle" class="logo-letter">C</text>
+        </svg>
+        <span class="logo-text">CRYPTEX</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-panel="encrypt">
+          <svg viewBox="0 0 20 20"><path d="M10 1L18 5v6c0 4.4-3.4 8.5-8 9.5C5.4 19.5 2 15.4 2 11V5l8-4z"/></svg>
+          <span>Chiffrer</span>
+        </button>
+        <button class="nav-item" data-panel="decrypt">
+          <svg viewBox="0 0 20 20"><path d="M10 1L18 5v6c0 4.4-3.4 8.5-8 9.5C5.4 19.5 2 15.4 2 11V5l8-4z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 10l2 2 4-4"/></svg>
+          <span>Déchiffrer</span>
+        </button>
+        <button class="nav-item" data-panel="keys">
+          <svg viewBox="0 0 20 20"><circle cx="8" cy="11" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11.5 8.5l6 6M15 13l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>Clés</span>
+        </button>
+        <button class="nav-item" data-panel="history">
+          <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 6v4l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>Historique</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="fingerprint-badge">
+          <span class="fp-label">CLÉ ACTIVE</span>
+          <span class="fp-value" id="sidebar-fingerprint">—</span>
+        </div>
+        <div class="status-dot-wrapper">
+          <span class="status-dot" id="status-dot"></span>
+          <span class="status-text" id="status-text">Hors ligne</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── MAIN CONTENT ── -->
+    <main class="main-content">
+
+      <!-- ─── PANEL : CHIFFRER ─── -->
+      <section class="panel active" id="panel-encrypt">
+        <div class="panel-header">
+          <h2 class="panel-title">Chiffrement</h2>
+          <div class="mode-toggle">
+            <button class="mode-btn active" id="mode-file" data-mode="file">Fichier</button>
+            <button class="mode-btn" id="mode-msg" data-mode="message">Message</button>
+          </div>
+        </div>
+
+        <!-- Mode Fichier -->
+        <div id="encrypt-file-mode">
+          <div class="dropzone" id="encrypt-dropzone">
+            <div class="dropzone-inner">
+              <div class="drop-icon-wrap">
+                <div class="drop-hex-ring"></div>
+                <svg class="drop-icon" viewBox="0 0 48 48">
+                  <path d="M24 8v24M16 24l8-16 8 16" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M8 36h32" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <p class="drop-label">Glissez un fichier ici</p>
+              <p class="drop-sub">ou <label class="drop-browse" for="file-input">parcourez</label> vos dossiers</p>
+              <p class="drop-formats">Tous formats acceptés · Max 100 MB</p>
+            </div>
+            <input type="file" id="file-input" class="hidden" />
+          </div>
+
+          <div class="file-preview hidden" id="file-preview">
+            <div class="file-icon-wrap">
+              <span class="file-ext" id="file-ext">—</span>
+            </div>
+            <div class="file-meta">
+              <span class="file-name" id="file-name"></span>
+              <span class="file-size" id="file-size"></span>
+            </div>
+            <button class="file-remove" id="file-remove" title="Retirer">✕</button>
+          </div>
+
+          <div class="action-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="save-to-disk" />
+              <span class="checkbox-custom"></span>
+              Sauvegarder aussi dans outputs/
+            </label>
+            <button class="btn-primary btn-encrypt" id="btn-encrypt-file" disabled>
+              <span class="btn-text">Chiffrer le fichier</span>
+              <span class="btn-loader hidden"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Mode Message -->
+        <div id="encrypt-msg-mode" class="hidden">
+          <div class="textarea-wrap">
+            <textarea
+              id="message-input"
+              class="cyber-textarea"
+              placeholder="Saisissez votre message confidentiel…"
+              rows="8"
+            ></textarea>
+            <span class="char-count" id="char-count">0 caractères</span>
+          </div>
+          <div class="action-row">
+            <button class="btn-primary btn-encrypt" id="btn-encrypt-msg">
+              <span class="btn-text">Chiffrer le message</span>
+              <span class="btn-loader hidden"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Barre de progression du chiffrement -->
+        <div class="encrypt-progress hidden" id="encrypt-progress">
+          <div class="progress-track">
+            <div class="progress-bar" id="progress-bar"></div>
+          </div>
+          <div class="progress-steps">
+            <span class="pstep" id="pstep-hash">◎ SHA-256</span>
+            <span class="pstep" id="pstep-sign">◎ Signature RSA</span>
+            <span class="pstep" id="pstep-aes">◎ AES-256-GCM</span>
+            <span class="pstep" id="pstep-rsa">◎ RSA-OAEP</span>
+          </div>
+          <div class="cipher-stream" id="cipher-stream" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <!-- ─── PANEL : DÉCHIFFRER ─── -->
+      <section class="panel hidden" id="panel-decrypt">
+        <div class="panel-header">
+          <h2 class="panel-title">Déchiffrement</h2>
+        </div>
+
+        <div class="dropzone" id="decrypt-dropzone">
+          <div class="dropzone-inner">
+            <div class="drop-icon-wrap">
+              <div class="drop-hex-ring"></div>
+              <svg class="drop-icon" viewBox="0 0 48 48">
+                <path d="M24 8v24M16 24l8 8 8-8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M8 36h32" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <p class="drop-label">Déposez votre fichier .bin</p>
+            <p class="drop-sub">ou <label class="drop-browse" for="decrypt-input">parcourez</label> vos dossiers</p>
+          </div>
+          <input type="file" id="decrypt-input" class="hidden" accept=".bin" />
+        </div>
+
+        <div class="file-preview hidden" id="decrypt-preview">
+          <div class="file-icon-wrap locked">
+            <span class="file-ext">BIN</span>
+          </div>
+          <div class="file-meta">
+            <span class="file-name" id="decrypt-name"></span>
+            <span class="file-size" id="decrypt-size"></span>
+          </div>
+          <button class="file-remove" id="decrypt-remove" title="Retirer">✕</button>
+        </div>
+
+        <div class="verify-steps" id="verify-steps">
+          <div class="vcheck" id="vcheck-key">
+            <div class="vcheck-icon">◈</div>
+            <div class="vcheck-info">
+              <span class="vcheck-name">Déchiffrement RSA-OAEP</span>
+              <span class="vcheck-desc">Récupération de la clé AES éphémère</span>
+            </div>
+            <div class="vcheck-status">—</div>
+          </div>
+          <div class="vcheck" id="vcheck-gcm">
+            <div class="vcheck-icon">⬡</div>
+            <div class="vcheck-info">
+              <span class="vcheck-name">Vérification tag GCM</span>
+              <span class="vcheck-desc">Authenticité du chiffrement AES</span>
+            </div>
+            <div class="vcheck-status">—</div>
+          </div>
+          <div class="vcheck" id="vcheck-hash">
+            <div class="vcheck-icon">◈</div>
+            <div class="vcheck-info">
+              <span class="vcheck-name">Intégrité SHA-256</span>
+              <span class="vcheck-desc">Hash du fichier original vérifié</span>
+            </div>
+            <div class="vcheck-status">—</div>
+          </div>
+          <div class="vcheck" id="vcheck-sig">
+            <div class="vcheck-icon">⬡</div>
+            <div class="vcheck-info">
+              <span class="vcheck-name">Signature RSA-PSS</span>
+              <span class="vcheck-desc">Authenticité de l'expéditeur</span>
+            </div>
+            <div class="vcheck-status">—</div>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button class="btn-primary" id="btn-decrypt" disabled>
+            <span class="btn-text">Déchiffrer & Vérifier</span>
+            <span class="btn-loader hidden"></span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ─── PANEL : CLÉS ─── -->
+      <section class="panel hidden" id="panel-keys">
+        <div class="panel-header">
+          <h2 class="panel-title">Tableau de bord des clés</h2>
+        </div>
+
+        <div class="keys-grid">
+          <!-- Carte clé active -->
+          <div class="key-card key-card--active">
+            <div class="key-card-header">
+              <span class="key-badge">RSA-4096</span>
+              <span class="key-status-chip active">Active</span>
+            </div>
+            <div class="key-fingerprint-display">
+              <span class="kfp-label">Fingerprint SHA-256</span>
+              <div class="kfp-grid" id="fingerprint-grid">
+                <!-- Rempli par JS -->
+              </div>
+            </div>
+            <div class="key-actions">
+              <button class="btn-secondary" id="btn-export-pub">
+                ↓ Exporter clé publique (.pem)
+              </button>
+            </div>
+            <div class="key-meta-row">
+              <div class="key-meta"><span>Algorithme</span><strong>RSA-4096 + OAEP</strong></div>
+              <div class="key-meta"><span>KDF</span><strong>Argon2id</strong></div>
+              <div class="key-meta"><span>Chiffrement</span><strong>AES-256-CBC</strong></div>
+            </div>
+          </div>
+
+          <!-- Import clé publique externe -->
+          <div class="key-card">
+            <div class="key-card-header">
+              <span class="key-badge">Import</span>
+            </div>
+            <p class="key-card-desc">Importez la clé publique d'un correspondant pour lui chiffrer un fichier.</p>
+            <div class="dropzone dropzone--small" id="pubkey-dropzone">
+              <input type="file" id="pubkey-input" class="hidden" accept=".pem"/>
+              <p>Glissez un fichier <code>.pem</code> ou <label class="drop-browse" for="pubkey-input">parcourez</label></p>
+            </div>
+            <div class="imported-key hidden" id="imported-key-info">
+              <span class="imp-label">Clé importée :</span>
+              <span class="imp-fp" id="imported-fp"></span>
+            </div>
+          </div>
+
+          <!-- Danger zone : régénération -->
+          <div class="key-card key-card--danger">
+            <div class="key-card-header">
+              <span class="key-badge key-badge--danger">⚠ Zone critique</span>
+            </div>
+            <p class="key-card-desc">Régénérer une nouvelle paire invalidera tous les fichiers chiffrés avec le trousseau actuel.</p>
+            <button class="btn-danger" id="btn-regen-from-panel">Régénérer le trousseau</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── PANEL : HISTORIQUE ─── -->
+      <section class="panel hidden" id="panel-history">
+        <div class="panel-header">
+          <h2 class="panel-title">Historique des opérations</h2>
+          <button class="btn-ghost btn-sm" id="btn-clear-history">Effacer l'historique</button>
+        </div>
+
+        <div class="history-list" id="history-list">
+          <div class="history-empty" id="history-empty">
+            <p>Aucune opération enregistrée pour cette session.</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       TOAST CONTAINER
+  ═══════════════════════════════════════════════ -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- ═══════════════════════════════════════════════
+       MODALE DE CONFIRMATION
+  ═══════════════════════════════════════════════ -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3 class="modal-title" id="modal-title">Confirmer l'action</h3>
+      <p class="modal-body" id="modal-body"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="modal-cancel">Annuler</button>
+        <button class="btn-danger" id="modal-confirm">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
